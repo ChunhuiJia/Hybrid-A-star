@@ -1,7 +1,7 @@
 function costmap = GridAStar(obstlist,goal,gres)
-    [minx,miny,obmap] = CalcObstMap(obstlist,gres);
-    col = goal(1);
-    row = goal(2);
+    [minx,miny,obmap] = CalcObstMap(obstlist,gres);   % gres，单元格分辨率，是用来搜索路径的单元格长度吗？、/
+    col = goal(1);  %目标点的x坐标
+    row = goal(2);  %目标点的y坐标
     col = ceil((col-minx)/gres);
     row = ceil((row-miny)/gres);
 %     goal = [gx,gy];
@@ -9,17 +9,17 @@ function costmap = GridAStar(obstlist,goal,gres)
 %     goal.precost = 0;
 %     goal.postcost = inf;
     goal = [row,col];
-    costmap = 0*obmap; 
+    costmap = 0*obmap; %这个costmap怎么理解呢？？？
     dim = size(obmap);     
     for i = 1:dim(1)
         for j = 1:dim(2)
             if obmap(i,j) == 1
-                costmap(i,j) = inf;
+                costmap(i,j) = inf;  %障碍物边缘处的cost置为inf
                 continue
-            elseif i == col && j == row
+            elseif i == col && j == row  %若查找到目标点时，怎么样？？？
                 continue
             end            
-            start = [i,j];
+            start = [i,j]; %start点为什么是这样的？遍历所有的可查找点到目标点的AStar搜索吗？为什么这么做？
             cost = AStarSearch(start,goal,obmap);
             costmap(i,j) = cost;
         end
@@ -35,7 +35,7 @@ function cost = AStarSearch(start,goal,obmap)
         for j = 1:dim(2)
             Grids(i,j,1) = i; % 父节点的所在行
             Grids(i,j,2) = j; % 父节点的所在列
-            Grids(i,j,3) = norm(([i,j]-goal)); % 启发值h
+            Grids(i,j,3) = norm(([i,j]-goal)); % 启发值h，直线距离
             Grids(i,j,4) = inf; % g值
         end
     end
@@ -79,7 +79,7 @@ function [Grids,Open,Close] = Update(wknode,goal,obmap,Grids,Open,Close)
                 if isempty(Close)
                     % do nothing
                 elseif ismember(adjnode,Close,'rows')
-                    [~,rIdx] = ismember(adjnode,Close,'rows');
+                    [~,rIdx] = ismember(adjnode,Close,'rows');  %若可达临近节点在CloseList中，把该节点从CloseList中删除，这是为什么呢？
                     Close(rIdx,:) = [];
                 end
             end
@@ -99,7 +99,7 @@ function [wknode,Open] = PopOpen(Open,Grids)
         end
     end
     wknode = Open(minidx,:);
-    Open(minidx,:) = [];
+    Open(minidx,:) = [];  %把第minidx个元素置空，其实也就是把第minidx个元素删除
 end
 
 function [minx,miny,obmap] = CalcObstMap(obstlist,gres)
@@ -108,16 +108,16 @@ function [minx,miny,obmap] = CalcObstMap(obstlist,gres)
     miny = min(obstlist(:,2));
     maxy = max(obstlist(:,2));
     xwidth = maxx - minx;
-    xwidth = ceil(xwidth/gres);
+    xwidth = ceil(xwidth/gres);  %cei,Y = ceil(X) 将 X 的每个元素四舍五入到大于或等于该元素的最接近整数。
     ywidth = maxy - miny;
-    ywidth = ceil(ywidth/gres);
-    obmap = zeros(ywidth,xwidth);
+    ywidth = ceil(ywidth/gres);  
+    obmap = zeros(ywidth,xwidth);  %obmap怎么理解
     for i = 1:ywidth
         for j = 1:xwidth
             ix = minx+(j-1/2)*gres;
             iy = miny+(i-1/2)*gres;
-            [~,D] = knnsearch(obstlist,[ix,iy]);
-            if D < 0.5
+            [~,D] = knnsearch(obstlist,[ix,iy]);  %求最近的障碍物点的距离，也就是距离障碍边沿的距离
+            if D < 0.5  %啥意思，当搜索的栅格点离障碍物非常仅时，把该点置1，咋的？碰撞检测吗？
                 obmap(i,j) = 1;
             end
         end

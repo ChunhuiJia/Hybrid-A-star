@@ -290,7 +290,7 @@ function cost = TotalCost(wknode,cfg)
     % 从当前结点到栅格中心
     xshift = wknode.x - (gres*(wknode.xidx-0.5)+cfg.MINX); % 栅格的index是线的交点，而不是栅格的中心,在求坐标时所以会有减0.5
     yshift = wknode.y - (gres*(wknode.yidx-0.5)+cfg.MINY);
-    cost = cost+cfg.H_COST*norm([xshift,yshift]);
+    cost = cost+cfg.H_COST*norm([xshift,yshift]);  %没搞明白算的是什么？算的是wknode距离他最近的栅格的中心的直线距离吗？
     % f = g + h
     cost = wknode.cost + cost;
 end
@@ -299,7 +299,7 @@ function [isok,path] = AnalysticExpantion(Start,End,Vehicle,Configure)
     isok = true;
     isCollision = false;
     
-    % 将起点转换到原点计算轨迹，变换坐标系了
+    % 将起点转换到原点计算轨迹，变换坐标系了（把起点当作原点，计算方便一点）
     pvec = End-Start;
     x = pvec(1);
     y = pvec(2);
@@ -399,7 +399,7 @@ function [isok,xidx,yidx,thidx] = CalcIdx(x,y,theta,cfg)
         return
     end
     costmap = cfg.ObstMap;
-    if costmap(yidx,xidx) == inf
+    if costmap(yidx,xidx) == inf  %看看起始点用A*算法能否找到可行驶路径，若A*都无法搜索到可行驶路径，说明没有可通行的路径
         isok = false;
     end
 end

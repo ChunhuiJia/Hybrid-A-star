@@ -1,3 +1,5 @@
+clc,clear;
+close All;
 ObstList = []; % Obstacle point list
 
 for i = -25:25
@@ -62,11 +64,11 @@ Configure.MAXY = max(ObstList(:,2))+Configure.EXTEND_AREA;
 Configure.MINYAW = -pi;
 Configure.MAXYAW = pi;
 % Cost related define
-Configure.SB_COST = 0; % switch back penalty cost
-Configure.BACK_COST = 1.5; % backward penalty cost
-Configure.STEER_CHANGE_COST = 1.5; % steer angle change penalty cost
-Configure.STEER_COST = 1.5; % steer angle change penalty cost
-Configure.H_COST = 10; % Heuristic cost
+Configure.SB_COST = 0; % switch back penalty cost,这个是什么意思？？？
+Configure.BACK_COST = 1.5; % backward penalty cost，倒车的惩罚成本
+Configure.STEER_CHANGE_COST = 1.5; % steer angle change penalty cost，方向盘角度变化的惩罚成本
+Configure.STEER_COST = 1.5; % steer angle change penalty cost，这个和change的那个cost有什么区别？
+Configure.H_COST = 10; % Heuristic cost，启发函数，怎么用？
 % 
 % Start = [-15, 13, 0];
 % End = [0, 13, pi];
