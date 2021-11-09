@@ -40,7 +40,7 @@ function [x,y,th,D,delta] = HybridAStar(Start,End,Vehicle,Configure)
             [x,y,th,D,delta] = getFinalPath(path,Close,veh,cfg);
             break % 如果能直接得到RS曲线，则跳出while循环
         end
-        [Open,Close] = Update(wknode,Open,Close,veh,cfg); % 使用
+        [Open,Close] = Update(wknode,Open,Close,veh,cfg); % 若没有从wknode找到到goal的无碰撞的RS曲线，则进行wknode的可达node的探索，加入到open中
     end
 %     [isok,path] = AnalysticExpantion(Start,End,Vehicle,Configure);
 end
@@ -80,7 +80,7 @@ function [x,y,th,D,delta] = getFinalPath(path,Close,veh,cfg)
     D = [];
     delta = [];
     flag = 0;
-    % 路径要么是纯RS路径，要么是由RS路径和混合A*组合一起来的路径，先处理混合A*的结点，最后处理RS路径，肯定有RS路径
+    % 路径要么是纯RS路径，要么是由RS路径和混合A*组合一起来的路径，先处理混合A*的结点，最后处理RS路径 ，肯定有RS路径
     if length(nodes) >= 2
         % 不是纯的RS路径，而是由RS路径和混合A*组合一起来的路径，>=2这些节点都是混合A*搜出来的
         for i = length(nodes):-1:2
@@ -282,7 +282,7 @@ function [wknode,nodes] = PopNode(nodes,cfg)
     nodes(minidx) = [];
 end
 
-function cost = TotalCost(wknode,cfg)
+function cost = TotalCost(wknode,cfg)  %cost=h_cost(A*搜索出来的)+该点到该栅格中心点的距离*cfg.H_COST,第二项是因为wknode的x和y可能不是在栅格中心点，而h_cost是A*基于栅格中心点计算的行进距离，这两项合起来作为h_cost，wknode.cost是g_cost
     gres = cfg.XY_GRID_RESOLUTION;
     costmap = cfg.ObstMap;
     % 从栅格中心到目标
@@ -322,7 +322,7 @@ function [isok,path] = AnalysticExpantion(Start,End,Vehicle,Configure)
 
     % 以下是根据路径点和车辆运动学模型计算位置，检测是否会产生碰撞，返回isok的值。对每段路径从起点到终点按顺序进行处理，这一个线段的终点pvec是下一个线段的起点px,py,pth，  
     types = path.type;
-    t = rmin*path.t;
+    t = rmin*path.t;  %t,u,r,w,x分别代表各个次序type中对应的操作方式（L,R,S,N...）的路径距离（好像是通过/rmin，给归一化成弧度值了），所以实际行进距离要再乘*rmin
     u = rmin*path.u;
     v = rmin*path.v;
     w = rmin*path.w;
@@ -353,7 +353,7 @@ function [isok,path] = AnalysticExpantion(Start,End,Vehicle,Configure)
         % 把此段的路径离散成为路点，即栅格索引,然后为路点，然后检测是否存在障碍物碰撞问题
         for idx = 1:round(abs(segs(i))/mres) % round()四舍五入
             % D和delta是固定，说明转弯的时候是按固定半径的圆转弯
-           	[px,py,pth] = VehicleDynamic(px,py,pth,D,delta,veh.WB);
+           	[px,py,pth] = VehicleDynamic(px,py,pth,D,delta,veh.WB);  %veh.WB：[m] wheel base: rear to front steer
             if rem(idx,5) == 0 % rem(a,b)，返回用 a/b后的余数，每5个点，即0.5m检查下是否碰撞
                 tvec = [px,py,pth];
                 isCollision = VehicleCollisionCheck(tvec,obstline,veh);

@@ -1,5 +1,7 @@
 # Hybrid A star Code Analysis
 
+逻辑图：[Hybrid A star逻辑图--亿图图示打开](doc/HybridAStarLogicGraph.eddx)
+
 ## 1.1 构建环境
 
 
@@ -113,7 +115,7 @@ point=[x,y,heading_angle_rad]
 
 [astar算法伪代码--推荐](https://blog.csdn.net/epeaktop/article/details/21948235?spm=1001.2101.3001.6650.1&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7Edefault-1.no_search_link&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7Edefault-1.no_search_link)
 
-### A*搜索伪代码(基于python)
+### A*搜索伪代码
 
 ```cpp
 astar()
@@ -617,7 +619,7 @@ end
 
 ### inNodes()
 
-**函数功能**：检查当前的wknode是否在CloseList中
+**函数功能**：检查node是否在nodes里，检查方式是通过node的xidx、yidx、yawidx是否相等
 
 **函数路径**：
 
@@ -649,7 +651,7 @@ end
 
 ### AnalysticExpantion()
 
-**函数功能**：以wknode为根节点生成搜索树，使用Reeds-Shepp方法基于车辆单轨模型进行运动学解析拓展子结点
+**函数功能**：使用Reeds-Shepp方法计算搜索点到终点的RS轨迹，并检测是否发生碰撞
 
 **函数路径**：
 
@@ -825,3 +827,253 @@ end
 
 **函数功能**：Reeds Shepp的CCSCC行进方式求得的路径结果
 
+### getFinalPath()
+
+**函数功能**：当搜索到的wknode到goal之间的RS曲线没有发生碰撞，则进入这个函数中得到最终路径点
+
+**函数路径**：
+
+**函数解释**：[x,y,th,D,delta] = getFinalPath(path,Close,veh,cfg)
+
+**问题**：
+
+```matlab
+function [x,y,th,D,delta] = getFinalPath(path,Close,veh,cfg)
+    wknode = Close(end); % RS曲线中最后一个元素是目标点
+    Close(end) = [];
+    nodes = [wknode];
+    % 找目标点wknode的parent,回溯，直到Close集合为空
+    while ~isempty(Close)
+        n = length(Close);
+        parent = wknode.parent;
+        % 计算从目标返回到起始点的路径点序列，放入nodes中
+        for i = n:-1:1
+            flag = 0; % 只有赋值，没有使用
+            tnode = Close(i);
+            if tnode.xidx == parent(1)...
+                    && tnode.yidx == parent(2)...
+                    && tnode.yawidx == parent(3)
+                nodes(end+1) = tnode;
+                wknode = tnode;
+                flag = 1;
+                break
+            end
+        end
+        Close(i) = [];        
+    end
+    rmin = veh.MIN_CIRCLE;
+    smax = veh.MAX_STEER;
+    mres = cfg.MOTION_RESOLUTION;
+    gres = cfg.XY_GRID_RESOLUTION;
+    % decrease one step, caz node origin is consider in
+    nlist = floor(gres*1.5/cfg.MOTION_RESOLUTION)+1; % 固定值31，和栅格的索引是选取线的交点还是选取栅格中心有关，floor是朝负无穷大四舍五入     % 每条轨迹大概是2米的长度。这里乘以1.5是确保下一个末端状态肯定在另一个栅格中，不会还在一个栅格中！在地图栅格中子结点拓展。比如对角线长度是1.4，此时还是在同一个栅格中
+    x = [];
+    y = [];
+    th = [];
+    D = [];
+    delta = [];
+    flag = 0;
+    % 路径要么是纯RS路径，要么是由RS路径和混合A*组合一起来的路径，先处理混合A*的结点，最后处理RS路径，肯定有RS路径
+    if length(nodes) >= 2
+        % 不是纯的RS路径，而是由RS路径和混合A*组合一起来的路径，>=2这些节点都是混合A*搜出来的
+        for i = length(nodes):-1:2
+            tnode = nodes(i);
+            ttnode = nodes(i-1); % parent of i
+            % initial point
+            px = tnode.x;
+            py = tnode.y;
+            pth = tnode.theta;
+            x = [x, px];
+            y = [y, py];
+            th = [th, pth];
+            D = [D, ttnode.D];
+            delta = [delta, ttnode.delta];
+            for idx = 1:nlist
+                [px,py,pth] = VehicleDynamic(px,py,pth,ttnode.D,ttnode.delta,veh.WB);
+                x = [x, px];
+                y = [y, py];
+                th = [th, pth];
+                D = [D, ttnode.D];
+                delta = [delta, ttnode.delta];
+            end
+            % 删除点，为RS路径做准备
+            if i ~= 2
+                x(end) = [];
+                y(end) = [];
+                th(end) = [];
+                D(end) = [];
+                delta(end) = [];
+            end
+        end
+    else
+        % 最后一个结点是纯的RS路径终点
+        flag = 1;
+        tnode = nodes(1);
+        px = tnode.x;
+        py = tnode.y;
+        pth = tnode.theta;
+        x = [x, px];
+        y = [y, py];
+        th = [th, pth];
+    end
+    % 此时已经搜完了全部路径，最后肯定有一段是RS路径
+    types = path.type;
+    t = rmin*path.t;
+    u = rmin*path.u;
+    v = rmin*path.v;
+    w = rmin*path.w;
+    segs = [t,u,v,w,rmin*path.x;];% avoid duplicate of x
+    for i = 1:5
+        if segs(i) == 0
+            continue
+        end
+        s = sign(segs(i)); % 前进或后退
+        
+        if types(i) == 'S'          
+            tdelta = 0;
+        elseif types(i) == 'L'
+            tdelta = smax;
+        elseif types(i) == 'R'
+            tdelta = -smax;
+        else
+            % do nothing
+        end
+        if flag == 1
+            % initialization if only rs path
+            D = [D, s*mres];
+            delta = [delta, tdelta];
+            flag = 0;
+        end
+        % 根据RS曲线路径的输入，基于运动学公式计算RS曲线上每个路径点的状态x,y,th
+        for idx = 1:round(abs(segs(i))/mres) % 四舍五入为最近的小数或整数
+           	[px,py,pth] = VehicleDynamic(px,py,pth,s*mres,tdelta,veh.WB); % s*mres中s代表前进和后退
+            x = [x, px];
+            y = [y, py];
+            th = [th, pth];
+            D = [D, s*mres];
+            delta = [delta, tdelta];         
+        end
+    end
+end
+```
+
+### Update()
+
+**函数功能**：若没有找到从wknode到goal的无碰撞最优RS曲线，则进入Update函数中对wknode节点的可达临近节点进行扩展，加入到open_list中
+
+**函数路径**：
+
+**函数解释**：[Open,Close] = Update(wknode,Open,Close,veh,cfg)
+
+**问题**：
+
+```matlab
+function [Open,Close] = Update(wknode,Open,Close,veh,cfg)
+    mres = cfg.MOTION_RESOLUTION; % motino resolution    
+    smax = veh.MAX_STEER; % 0.6[rad],maximum steering angle
+    sres = smax/cfg.N_STEER; % 20,steering resolution  
+    % all possible control input，
+    for D = [-mres,mres] % D是0.1m,正负代表前进或后退,车辆当前位置的后轴中心与下一个位置的后轴中心之间的直线距离，有2个子结点
+        for delta = [-smax:sres:-sres,0,sres:sres:smax] % delta是转向角，分辨率是0.03[rad]，[-0.6,0.6],有21个子结点(包含0[rads])
+            [isok,tnode] = CalcNextNode(wknode,D,delta,veh,cfg); % 计算wknode的所有子结点，一共2*21=42个，此函数是根据固定的D和delta计算wknode沿着一条路径的所有子结点，tnode是此条路径的末端点
+            if isok == false % 子结点不可行
+                continue
+            end
+            [isok,~] = inNodes(tnode,Close);% 在Close集合中
+            if isok
+                continue
+            end 
+            % 拓展的节点如果在Open中比较f值;若不在则添加到Open中
+            [isok,idx] = inNodes(tnode,Open);
+            if isok
+                % 与之前的cost比较，进行更新
+                tcost = TotalCost(tnode,cfg);
+                ttnode = Open(idx);
+                ttcost = TotalCost(ttnode,cfg);
+                if tcost < ttcost
+                    Open(idx) = tnode;
+                end
+            else
+                Open(end+1) = tnode;
+            end           
+        end
+    end  
+end
+```
+
+### CalcNextNode()
+
+**函数功能**：
+
+**函数路径**：
+
+**函数解释**：[isok,tnode] = CalcNextNode(wknode,D,delta,veh,cfg)
+
+**问题**：
+
+```matlab
+% 根据D和delta计算wknode沿着一条路径的所有子结点
+function [isok,tnode] = CalcNextNode(wknode,D,delta,veh,cfg)
+    px = wknode.x;
+    py = wknode.y;
+    pth = wknode.theta;
+    gres = cfg.XY_GRID_RESOLUTION;
+    obstline = cfg.ObstLine;
+    % 每条轨迹大概是2米的长度。这里乘以1.5是确保下一个末端状态肯定在另一个栅格中，不会还在一个栅格中！在地图栅格中子结点拓展。比如对角线长度是1.4，此时还是在同一个栅格中
+    nlist = floor(gres*1.5/cfg.MOTION_RESOLUTION)+1; %此处是定值31， 计算给定D和delta下，沿着一条路径上wknode的子结点的数目，以便填充数据     % 每条轨迹大概是2米的长度。这里乘以1.5是确保下一个末端状态肯定在另一个栅格中，不会还在一个栅格中！在地图栅格中子结点拓展。比如对角线长度是1.4，此时还是在同一个栅格中
+    x = zeros(1,nlist+1);
+    y = x;
+    th = x;
+    x(1) = px;
+    y(1) = py;
+    th(1) = pth;
+    for idx = 1:nlist % 根据当前的状态和给定的控制，计算此条路径上的连着的车辆状态，根据上一时刻计算下一时刻
+        [px,py,pth] = VehicleDynamic(px,py,pth,D,delta,veh.WB);
+        x(idx+1) = px; % x,y,th储存了数据，但是没用到变量
+        y(idx+1) = py;
+        th(idx+1) = pth;
+        if rem(idx,5) == 0 % 每隔5个点进行一次碰撞检测
+            tvec = [px,py,pth];
+            isCollision = VehicleCollisionCheck(tvec,obstline,veh);
+            if isCollision
+                break
+            end
+        end
+    end
+    tnode = wknode;
+    if isCollision
+        isok = false;
+        return
+    else
+%         plot(x,y);
+        [isok,xidx,yidx,thidx] = CalcIdx(px,py,pth,cfg); % 把路径末端点的实际坐标转换为栅格坐标
+        if isok == false
+            return
+        else
+            cost = wknode.cost;
+            if D > 0 % 前进
+                cost = cost + gres*1.5; % 每条轨迹大概是2米的长度。这里乘以1.5是确保下一个末端状态肯定在另一个栅格中，不会还在一个栅格中！在地图栅格中子结点拓展。比如对角线长度是1.4，此时还是在同一个栅格中
+            else % 后退
+                cost = cost + cfg.BACK_COST*gres*1.5;
+            end
+            if D ~= wknode.D
+                cost = cost + cfg.SB_COST;
+            end
+            cost = cost + cfg.STEER_COST*abs(delta);
+            cost = cost + cfg.STEER_CHANGE_COST*abs(delta-wknode.delta);
+            tnode = Node(xidx,yidx,thidx,D,delta,px,py,pth,...
+                [wknode.xidx,wknode.yidx,wknode.yawidx],cost); % tnode是路径的末端点，cost为到当前状态到此路径末端状态的成本
+        end         
+    end
+end
+```
+
+### VehicleDynamic()
+
+**函数功能**：根据当前的状态和给定的控制，计算此条路径上的车辆状态，根据上一时刻计算下一时刻，并对障碍物进行碰撞检测
+
+**函数路径**：
+
+**函数解释**：[px,py,pth] = VehicleDynamic(px,py,pth,D,delta,veh.WB)
+
+**问题**：
